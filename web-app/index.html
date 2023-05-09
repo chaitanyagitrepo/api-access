@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="UTF-8" />
+    <title>Guest API Scanner</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.13.1/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.13.1/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@rjsf/core@4.2.3/dist/react-jsonschema-form.js"></script>
+    <!-- Don't use this in production: -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      #app,
+      button.btn {
+        font-size: 0.9rem;
+      }
+
+      pre {
+        background-color: ghostwhite;
+        border: 1px solid silver;
+        padding: 10px 20px;
+        margin-top: 0.5rem;
+        height: 95vh;
+        overflow: scroll-y;
+      }
+
+      .json-key {
+        color: brown;
+      }
+
+      .json-value {
+        color: navy;
+      }
+
+      .json-string {
+        color: olive;
+      }
+
+      .control-label,
+      .checkbox>label>span {
+        font-weight: 600;
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <div id="app" class="container-fluid">
+      <div class="row">
+        <div id="form" class="col-sm-4"></div>
+        <pre class="col-sm-7"><code id="results" ></code></pre>
+      </div>
+    </div>
+    <script type="text/babel">
+
+      let customActionPlaceholder = {
+        actions: [
+          {
+            id: "1;a",
+            descriptor: "aura://RecordUiController/ACTION$getObjectInfos",
+            callingDescriptor: "UNKNOWN",
+            params: { objectApiNames: ["User", "Case", "ContentDocument"] },
+          },
+        ],
+      };
+
+      let defaults = {
+        host: "",
+        sendCustomAction: "Default",
+        tlsAcceptInvalidCert: false,
+        auraToken: null,
+        scanObjects: "No",
+        sobjects: "User",
+        customAction: JSON.stringify(customActionPlaceholder, null, 2),
+        count: 1
+      };
+
+      const Form = JSONSchemaForm.default;
+      const schema = {
+        title: "Guest User API Scanner",
+        type: "object",
+        required: ["host"],
+        properties: {
+          host: {
+            type: "string",
+            format: "uri",
+            title: "Community URL",
+            default: defaults.host,
+          },
+          sendCustomAction: {
+            type: ["string", "null"], title: "Action Type", default: defaults.sendCustomAction, enum: ["Default", "Custom"],
+          },
+          tlsAcceptInvalidCert: {
+            type: "boolean", title: " Accept invalid SSL Certificate", default: defaults.tlsAcceptInvalidCert,
+          },
+          sessionToken: {
+            type: ["string", "null"], title: "Session Token",
+            description: "The Session Token (if you have one)",
+            default: defaults.sessionToken,
+          },
+        },
+
+        dependencies: {
+          "sessionToken": {
+            "properties": {
+              "auraToken": {
+                "type": "string",
+                "title": "Aura.Token",
+                "description": "The value of aura.token (csrf) from a previous call to the site (required if you have a session token)",
+                default: defaults.auraToken
+              },
+            },
+            "required": [
+              "auraToken"
+            ]
+          },
+          "sendCustomAction": {
+            "oneOf": [{
+              "properties": {
+                "sendCustomAction": {
+                  "enum": ["Default"]
+                },
+                "scanObjects": {
+                  type: ["string", "null"],
+                  title: "Scan sObjects",
+                  enum: ["No", "Yes", "Yes, with Record Data"],
+                  default: defaults.scanObjects,
+                },
+              },
+              "required": [
+                "scanObjects"
+              ]
+            }, {
+              "properties": {
+                "sendCustomAction": {
+                  "enum": ["Custom"]
+                },
+                "customAction": {
+                  "type": "string",
+                  "title": "Custom Action",
+                  "description": "The Custom Action to send to the site",
+                  "default": defaults.customAction,
+                },
+              },
+              "required": [
+                "customAction"
+              ]
+            }]
+          },
+          "scanObjects": {
+            "oneOf": [{
+              "properties": {
+                "scanObjects": {
+                  "enum": ["No"]
+                }
+              }
+            }, {
+              "properties": {
+                "scanObjects": {
+                  "enum": ["Yes"]
+                },
+                "sobjects": {
+                  "type": "string",
+                  "title": "SObjects to Scan",
+                  "description": "The SObject API Names (comma-delimited, case sensitive) to scan",
+                  "default": defaults.sobjects,
+                  "examples": ["Account,Contact,User", "Account", "*"]
+                },
+              },
+              "required": [
+                "sobjects"
+              ]
+            }, {
+              "properties": {
+                "scanObjects": {
+                  "enum": ["Yes, with Record Data"]
+                },
+                "sobjects": {
+                  "type": "string",
+                  "title": "SObjects to Scan",
+                  "description": "The SObject API Names (comma-delimited, case sensitive) to scan",
+                  "default": defaults.sobjects,
+                  "examples": ["Account,Contact,User", "Account", "*"]
+                },
+                "count": {
+                  "type": "integer",
+                  "title": " Number of records to retrieve",
+                  "default": defaults.count,
+                },
+              },
+              "required": [
+                "sobjects",
+                "count"
+              ]
+            }]
+          },
+        },
+      };
+
+
+      const uiSchema = {
+        "ui:order": [
+          "host",
+          "sendCustomAction",
+          "customAction",
+          "scanObjects",
+          "sobjects",
+          "queryall",
+          "getrecords",
+          "count",
+          "*"
+        ],
+        "host": {
+          "ui:autofocus": true,
+          "ui:emptyValue": "",
+          "ui:placeholder": "https://something.my.site.com/community/",
+          "ui:help": "The Community Url (https://something.my.site.com/community or a custom domain) \n without the /s/"
+        },
+        "customAction": {
+          "ui:placeholder": JSON.stringify(customActionPlaceholder, null, 2),
+          "ui:widget": "textarea",
+          "ui:options": {
+            "rows": 5
+          }
+        },
+        "sobjects": {
+          "ui:help": "Use * to query all sObjects.  This can take a while.",
+          "ui:placeholder": "User,Case,ContentDocument",
+        },
+        "getrecords": {
+          "ui:widget": "hidden"
+        },
+        "site": {
+          "ui:widget": "hidden"
+        },
+        "tlsAcceptInvalidCert": {
+          "ui:help": "This will connect to the target site even if the SSL certificate is invalid. (Sometimes this happens with custom domains)"
+        }
+      };
+
+      const log = (type) => console.log.bind(console, type);
+
+      const onSubmit = ({ formData }, e) => {
+        document.getElementById('results').innerHTML = 'Loading...';
+        let dataToSend = { ...formData };
+        if (formData.sessionToken === null || formData.sessionToken === undefined || formData.sessionToken?.trim() === '') {
+          delete dataToSend.sessionToken;
+          delete dataToSend.auraToken;
+        }
+        if (dataToSend.sendCustomAction == "Custom") {
+          dataToSend.customAction = formData.customAction.trim();
+          dataToSend.scanObjects = 'No';
+          delete dataToSend.sobjects;
+          delete dataToSend.queryall;
+          delete dataToSend.getrecords;
+          delete dataToSend.count;
+        } else {
+          let scanObjects = formData.scanObjects;
+          delete dataToSend.customAction;
+          formData.customAction = JSON.stringify(customActionPlaceholder, null, 2);
+          dataToSend.getrecords = scanObjects == 'Yes, with Record Data';
+          if (scanObjects == 'No') {
+            delete dataToSend.sobjects;
+          } else {
+            dataToSend.sobjects = formData.sobjects?.split(',').map(s => s.trim()).filter(s => s != '').join(','); //remove empty strings
+            try {
+              let sobjectInput = document.getElementById('root_sobjects');
+              if (sobjectInput) {
+                sobjectInput.value = dataToSend.sobjects;
+              }
+            } catch (e) {
+              console.log(e);
+            }
+          }
+          dataToSend.queryall = formData.sobjects?.trim() == '*';
+          if (!dataToSend.getrecords) {
+            delete dataToSend.count;
+          }
+        }
+        console.log(dataToSend);
+        location.hash = btoa(JSON.stringify(dataToSend));
+        let resp = post(dataToSend).then(data => {
+          document.getElementById('results').innerHTML = library.json.prettyPrint(data); //JSON.stringify(data, null, '  ');
+        })
+      };
+
+      const post = async function (_data) {
+        return fetch('/api', {
+          method: 'POST',
+          headers: { "Content-type": "application/json;charset=UTF-8" },
+          body: JSON.stringify(_data),
+        })
+          .then(response => {
+            return response.json();
+          })
+          .catch(err => console.log(err));
+      }
+
+      let form = ReactDOM.render((
+        <Form schema={schema}
+          uiSchema={uiSchema}
+          onChange={log("changed")}
+          onSubmit={onSubmit}
+          onError={log("errors")} />
+      ), document.getElementById("form"), () => {
+        console.log('form rendered');
+      });
+
+      if (!library)
+        var library = {};
+
+      library.json = {
+        replacer: function (match, pIndent, pKey, pVal, pEnd) {
+          var key = '<span class=json-key>';
+          var val = '<span class=json-value>';
+          var str = '<span class=json-string>';
+          var r = pIndent || '';
+          if (pKey)
+            r = r + key + pKey.replace(/[": ]/g, '') + '</span>: ';
+          if (pVal)
+            r = r + (pVal[0] == '"' ? str : val) + pVal + '</span>';
+          return r + (pEnd || '');
+        },
+        prettyPrint: function (obj) {
+          var jsonLine = /^( *)("[\w]+": )?("[^"]*"|[\w.+-]*)?([,[{])?$/mg;
+          return JSON.stringify(obj, null, 3)
+            .replace(/&/g, '&amp;').replace(/\\"/g, '&quot;')
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(jsonLine, library.json.replacer);
+        }
+      };
+
+      //populate form data if hash is present
+      try {
+        if (location.hash) {
+          console.log("hash: " + location.hash.substring(1));
+          let data = JSON.parse(atob(location.hash.substring(1)));
+          defaults = { ...defaults, ...data };
+          form.state.formData = defaults;
+          form.forceUpdate();
+        }
+      } catch (e) {
+        console.error('error parsing hash: ' + e);
+      }
+    </script>
+  </body>
+
+</html>

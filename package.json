@@ -1,0 +1,26 @@
+{
+  "name": "sf-scanner",
+  "version": "1.0.0",
+  "description": "Scan Utility for Guest Account API Vulnerabilities via API",
+  "main": "run.js",
+  "bin": {
+    "sf-scanner": "./run.js"
+  },
+  "scripts": {
+    "test": "test"
+  },
+  "author": "Gustavo Tandeciarz",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "axios-retry": "^3.2.5",
+    "body-parser": "^1.19.0",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "form-data": "^4.0.0",
+    "json-colorizer": "^2.2.2",
+    "open": "^8.4.0",
+    "p-limit": "^4.0.0",
+    "yargs": "^16.2.0"
+  }
+}
